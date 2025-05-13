@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Roberto Lopez Duarte - Proyecto final - Galaga</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+</head>
+<body>
+<script>
+  let nave
+  let disparos = []
+  let enemigos = []
+  let vidas = 3
+  let nivel = 1
+  let puntos = 0
+  let pausa = false
+  let espacioPresionado = false
+  let juegoTerminado = false
+
+  function setup() {
+    createCanvas(600, 600)
+    iniciarJuego()
+  }
+
+  function draw() {
+    background(0)
+
+    if (!nave) return;
+
+    if (pausa) {
+      fill(255)
+      textSize(32)
+      textAlign(CENTER, CENTER)
+      text("Pausa", width / 2, height / 2)
+      mostrarVpn()
+      return
+    }
+
+    nave.mostrar()
+    nave.mover()
+
+    if (espacioPresionado && frameCount % 10 === 0) {
+      disparos.push(new Bala(nave.x + nave.w / 2, nave.y))
+    }
+
+    for (let i = disparos.length - 1; i >= 0; i--) {
+      disparos[i].mover()
+      disparos[i].mostrar()
+      if (disparos[i].fuera()) {
+        disparos.splice(i, 1)
+        continue
+      }
+      for (let j = enemigos.length - 1; j >= 0; j--) {
+        if (disparos[i] && disparos[i].toca(enemigos[j])) {
+          enemigos.splice(j, 1)
+          disparos.splice(i, 1)
+          puntos += 10
+          break
+        }
+      }
+    }
+
+    for (let i = enemigos.length - 1; i >= 0; i--) {
+      enemigos[i].mover()
+      enemigos[i].mostrar()
+      if (enemigos[i].y > height) {
+        enemigos.splice(i, 1)
+        vidas--
+      } else if (enemigos[i].toca(nave)) {
+        enemigos.splice(i, 1)
+        vidas--
+      }
+    }
+
+    mostrarVpn()
+
+    if (vidas <= 0) {
+      noLoop()
+      juegoTerminado = true
+      textAlign(CENTER, CENTER)
+      text("Perdiste - Pulsa Enter para reintentar", width / 2, height / 2)
+    }
+  }
+
+  function mostrarVpn() {
+    fill(255)
+    textSize(16)
+    textAlign(LEFT, TOP)
+    text("Vidas: " + vidas, 10, 10)
+    textAlign(RIGHT, TOP)
+    text("Puntos: " + puntos, width - 10, 10)
+    textAlign(CENTER, TOP)
+    text("Nivel: " + nivel, width / 2, 10)
+  }
+
+  function keyPressed() {
+    if (keyCode === LEFT_ARROW) nave.dirX = -1
+    if (keyCode === RIGHT_ARROW) nave.dirX = 1
+    if (keyCode === UP_ARROW) nave.dirY = -1
+    if (keyCode === DOWN_ARROW) nave.dirY = 1
+    if (key === ' ') espacioPresionado = true
+    if (keyCode === ENTER) {
+      if (juegoTerminado) {
+        vidas = 3
+        puntos = 0
+        nivel = 1
+        juegoTerminado = false
+        iniciarJuego()
+        loop()
+      } else {
+        pausa = !pausa
+      }
+    }
+  }
+
+  function keyReleased() {
+    if (keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW) nave.dirX = 0
+    if (keyCode === UP_ARROW || keyCode === DOWN_ARROW) nave.dirY = 0
+    if (key === ' ') espacioPresionado = false
+  }
+
+  function iniciarJuego() {
+    nave = new Nave()
+    disparos = []
+    enemigos = []
+    for (let i = 0; i < 10; i++) {
+      enemigos.push(new Enemigo(i * 50 + 50, -random(100, 600)))
+    }
+  }
+
+  class Nave {
+    constructor() {
+      this.x = width / 2
+      this.y = height - 40
+      this.w = 40
+      this.h = 20
+      this.dirX = 0
+      this.dirY = 0
+    }
+
+    mover() {
+      this.x += this.dirX * 5
+      this.y += this.dirY * 5
+      this.x = constrain(this.x, 0, width - this.w)
+      this.y = constrain(this.y, 0, height - this.h)
+    }
+
+    mostrar() {
+      fill(255)
+      rect(this.x, this.y, this.w, this.h)
+    }
+  }
+
+  class Bala {
+    constructor(x, y) {
+      this.x = x
+      this.y = y
+      this.r = 5
+    }
+
+    mover() {
+      this.y -= 7
+    }
+
+    mostrar() {
+      fill(255, 255, 0)
+      ellipse(this.x, this.y, this.r * 2)
+    }
+
+    fuera() {
+      return this.y < 0
+    }
+
+    toca(obj) {
+      return this.x > obj.x && this.x < obj.x + obj.w && this.y < obj.y + obj.h && this.y > obj.y
+    }
+  }
+
+  class Enemigo {
+    constructor(x, y) {
+      this.x = x
+      this.y = y
+      this.w = 30
+      this.h = 20
+      this.vel = 1
+    }
+
+    mover() {
+      this.y += this.vel
+    }
+
+    mostrar() {
+      fill(255, 0, 0)
+      rect(this.x, this.y, this.w, this.h)
+    }
+
+    toca(obj) {
+      return this.x < obj.x + obj.w && this.x + this.w > obj.x && this.y < obj.y + obj.h && this.y + this.h > obj.y
+    }
+  }
+</script>
+</body>
+</html>
