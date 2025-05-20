@@ -25,12 +25,15 @@
   let nave
   let disparos = []
   let enemigos = []
+  let enemigosDisparos = []
   let vidas = 3
   let nivel = 1
   let puntos = 0
   let pausa = false
   let espacioPresionado = false
   let juegoTerminado = false
+  let transicionNivel = false
+  let tiempoTransicion = 0
 
   function setup() {
     createCanvas(600, 600)
@@ -51,6 +54,18 @@
       return
     }
 
+    if (transicionNivel) {
+      fill(255)
+      textSize(32)
+      textAlign(CENTER, CENTER)
+      text("Nivel " + nivel, width / 2, height / 2)
+      if (millis() - tiempoTransicion > 2000) {
+        transicionNivel = false
+        iniciarJuego()
+      }
+      return
+    }
+
     nave.mostrar()
     nave.mover()
 
@@ -67,7 +82,12 @@
       }
       for (let j = enemigos.length - 1; j >= 0; j--) {
         if (disparos[i] && disparos[i].toca(enemigos[j])) {
-          enemigos.splice(j, 1)
+          if (enemigos[j].resistencia) {
+            enemigos[j].resistencia--
+            if (enemigos[j].resistencia <= 0) enemigos.splice(j, 1)
+          } else {
+            enemigos.splice(j, 1)
+          }
           disparos.splice(i, 1)
           puntos += 10
           break
@@ -78,11 +98,27 @@
     for (let i = enemigos.length - 1; i >= 0; i--) {
       enemigos[i].mover()
       enemigos[i].mostrar()
+      if (enemigos[i].puedeDisparar && frameCount % 60 === 0) {
+        enemigosDisparos.push(new BalaEnemiga(enemigos[i].x + enemigos[i].w / 2, enemigos[i].y + enemigos[i].h))
+      }
       if (enemigos[i].y > height) {
         enemigos.splice(i, 1)
         vidas--
       } else if (enemigos[i].toca(nave)) {
         enemigos.splice(i, 1)
+        vidas--
+      }
+    }
+
+    for (let i = enemigosDisparos.length - 1; i >= 0; i--) {
+      enemigosDisparos[i].mover()
+      enemigosDisparos[i].mostrar()
+      if (enemigosDisparos[i].fuera()) {
+        enemigosDisparos.splice(i, 1)
+        continue
+      }
+      if (enemigosDisparos[i].toca(nave)) {
+        enemigosDisparos.splice(i, 1)
         vidas--
       }
     }
@@ -94,6 +130,12 @@
       juegoTerminado = true
       textAlign(CENTER, CENTER)
       text("Perdiste - Pulsa Enter para reintentar", width / 2, height / 2)
+    }
+
+    if (enemigos.length === 0 && !juegoTerminado) {
+      nivel++
+      transicionNivel = true
+      tiempoTransicion = millis()
     }
   }
 
@@ -138,8 +180,17 @@
     nave = new Nave()
     disparos = []
     enemigos = []
-    for (let i = 0; i < 10; i++) {
-      enemigos.push(new Enemigo(i * 50 + 50, -random(100, 600)))
+    enemigosDisparos = []
+    if (nivel === 1) {
+      for (let i = 0; i < 10; i++) {
+        enemigos.push(new Enemigo(i * 50 + 50, -random(100, 600)))
+      }
+    } else if (nivel === 2) {
+      for (let i = 0; i < 5; i++) {
+        enemigos.push(new EnemigoZigZag(i * 100 + 50, -random(100, 400)))
+        enemigos.push(new EnemigoDispara(i * 100 + 50, -random(500, 1000)))
+      }
+      enemigos.push(new EnemigoResistente(width / 2 - 15, -200))
     }
   }
 
@@ -191,6 +242,31 @@
     }
   }
 
+  class BalaEnemiga {
+    constructor(x, y) {
+      this.x = x
+      this.y = y
+      this.r = 5
+    }
+
+    mover() {
+      this.y += 5
+    }
+
+    mostrar() {
+      fill(0, 255, 255)
+      ellipse(this.x, this.y, this.r * 2)
+    }
+
+    fuera() {
+      return this.y > height
+    }
+
+    toca(obj) {
+      return this.x > obj.x && this.x < obj.x + obj.w && this.y < obj.y + obj.h && this.y > obj.y
+    }
+  }
+
   class Enemigo {
     constructor(x, y) {
       this.x = x
@@ -211,6 +287,40 @@
 
     toca(obj) {
       return this.x < obj.x + obj.w && this.x + this.w > obj.x && this.y < obj.y + obj.h && this.y + this.h > obj.y
+    }
+  }
+
+  class EnemigoZigZag extends Enemigo {
+    constructor(x, y) {
+      super(x, y)
+      this.direccion = 1
+    }
+
+    mover() {
+      this.y += this.vel
+      this.x += this.direccion * 2
+      if (this.x < 0 || this.x > width - this.w) {
+        this.direccion *= -1
+      }
+    }
+  }
+
+  class EnemigoDispara extends Enemigo {
+    constructor(x, y) {
+      super(x, y)
+      this.puedeDisparar = true
+    }
+  }
+
+  class EnemigoResistente extends Enemigo {
+    constructor(x, y) {
+      super(x, y)
+      this.resistencia = 3
+    }
+
+    mostrar() {
+      fill(255, 100, 100)
+      rect(this.x, this.y, this.w, this.h)
     }
   }
 </script>
