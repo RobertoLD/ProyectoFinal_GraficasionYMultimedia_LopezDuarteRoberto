@@ -42,7 +42,6 @@
 
   function draw() {
     background(0)
-
     if (!nave) return;
 
     if (pausa) {
@@ -80,16 +79,19 @@
         disparos.splice(i, 1)
         continue
       }
+
       for (let j = enemigos.length - 1; j >= 0; j--) {
         if (disparos[i] && disparos[i].toca(enemigos[j])) {
-          if (enemigos[j].resistencia) {
+          if (enemigos[j] instanceof EnemigoInmortal) {
+          } else if (enemigos[j].resistencia) {
             enemigos[j].resistencia--
             if (enemigos[j].resistencia <= 0) enemigos.splice(j, 1)
+            puntos += 10
           } else {
             enemigos.splice(j, 1)
+            puntos += 10
           }
           disparos.splice(i, 1)
-          puntos += 10
           break
         }
       }
@@ -98,7 +100,7 @@
     for (let i = enemigos.length - 1; i >= 0; i--) {
       enemigos[i].mover()
       enemigos[i].mostrar()
-      if (enemigos[i].puedeDisparar && frameCount % 60 === 0) {
+      if (enemigos[i].puedeDisparar && enemigos[i].y > 0 && enemigos[i].y < height && frameCount % 60 === 0) {
         enemigosDisparos.push(new BalaEnemiga(enemigos[i].x + enemigos[i].w / 2, enemigos[i].y + enemigos[i].h))
       }
       if (enemigos[i].y > height) {
@@ -129,13 +131,23 @@
       noLoop()
       juegoTerminado = true
       textAlign(CENTER, CENTER)
-      text("Perdiste - Pulsa Enter para reintentar", width / 2, height / 2)
+      text("Perdiste, ¡No te rindas! ¡Pulsa Enter para reintentar!", width / 2, height / 2)
     }
 
-    if (enemigos.length === 0 && !juegoTerminado) {
-      nivel++
-      transicionNivel = true
-      tiempoTransicion = millis()
+      let enemigosRestantes = enemigos.filter(e => !(e instanceof EnemigoInmortal));
+      if (enemigosRestantes.length === 0 && !juegoTerminado) {
+      if (nivel === 3) {
+        noLoop()
+        juegoTerminado = true
+        fill(255)
+        textAlign(CENTER, CENTER)
+        textSize(28)
+        text("¡Salvaste la galaxia!.\nPulsa Enter para jugar de nuevo.", width / 2, height / 2)
+      } else {
+        nivel++
+        transicionNivel = true
+        tiempoTransicion = millis()
+      }
     }
   }
 
@@ -153,8 +165,6 @@
   function keyPressed() {
     if (keyCode === LEFT_ARROW) nave.dirX = -1
     if (keyCode === RIGHT_ARROW) nave.dirX = 1
-    if (keyCode === UP_ARROW) nave.dirY = -1
-    if (keyCode === DOWN_ARROW) nave.dirY = 1
     if (key === ' ') espacioPresionado = true
     if (keyCode === ENTER) {
       if (juegoTerminado) {
@@ -172,7 +182,6 @@
 
   function keyReleased() {
     if (keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW) nave.dirX = 0
-    if (keyCode === UP_ARROW || keyCode === DOWN_ARROW) nave.dirY = 0
     if (key === ' ') espacioPresionado = false
   }
 
@@ -186,12 +195,37 @@
         enemigos.push(new Enemigo(i * 50 + 50, -random(100, 600)))
       }
     } else if (nivel === 2) {
-      for (let i = 0; i < 5; i++) {
-        enemigos.push(new EnemigoZigZag(i * 100 + 50, -random(100, 400)))
-        enemigos.push(new EnemigoDispara(i * 100 + 50, -random(500, 1000)))
+      for (let i = 0; i < 10; i++) {
+        let x = i * 60 + 30
+        let y = -random(100, 600)
+        if (i % 2 === 0) {
+          enemigos.push(new EnemigoZigZagDispara(x, y))
+        } else {
+          enemigos.push(new EnemigoZigZag(x, y))
+        }
       }
-      enemigos.push(new EnemigoResistente(width / 2 - 15, -200))
-    }
+      enemigos.push(new EnemigoResistenteDispara(width / 2 - 15, -200))
+    } else if (nivel === 3) {
+        let cantidad = 15
+        let radio = 120
+        let centroYComun = height / 3
+
+        let grupo = { centroX: width / 3, centroY: centroYComun, direccion: 1 }
+
+        for (let i = 0; i < cantidad; i++) {
+          let angulo = TWO_PI * i / cantidad;
+          let x1 = grupo.centroX + cos(angulo) * radio;
+          let y1 = grupo.centroY + sin(angulo) * radio - 200;
+
+          if (i === 0) {
+            enemigos.push(new EnemigoInmortal(x1, y1, angulo, grupo));
+          } else if (i === 1 || i === 2) {
+            enemigos.push(new EnemigoCircularResistente(x1, y1, angulo, grupo));
+          } else {
+            enemigos.push(new EnemigoCircular(x1, y1, angulo, grupo));
+          }
+        }
+      }
   }
 
   class Nave {
@@ -201,14 +235,11 @@
       this.w = 40
       this.h = 20
       this.dirX = 0
-      this.dirY = 0
     }
 
     mover() {
       this.x += this.dirX * 5
-      this.y += this.dirY * 5
       this.x = constrain(this.x, 0, width - this.w)
-      this.y = constrain(this.y, 0, height - this.h)
     }
 
     mostrar() {
@@ -273,11 +304,12 @@
       this.y = y
       this.w = 30
       this.h = 20
-      this.vel = 1
+      this.velY = 1
+      this.puedeDisparar = false
     }
 
     mover() {
-      this.y += this.vel
+      this.y += this.velY
     }
 
     mostrar() {
@@ -293,36 +325,111 @@
   class EnemigoZigZag extends Enemigo {
     constructor(x, y) {
       super(x, y)
-      this.direccion = 1
+      this.velX = 1.5
+      this.velY = 1
     }
 
     mover() {
-      this.y += this.vel
-      this.x += this.direccion * 2
-      if (this.x < 0 || this.x > width - this.w) {
-        this.direccion *= -1
-      }
+      this.x += this.velX
+      this.y += this.velY
+      if (this.x > width - this.w || this.x < 0) this.velX *= -1
+    }
+
+    mostrar() {
+      fill(230, 10, 0)
+      rect(this.x, this.y, this.w, this.h)
     }
   }
 
-  class EnemigoDispara extends Enemigo {
+  class EnemigoZigZagDispara extends EnemigoZigZag {
     constructor(x, y) {
       super(x, y)
       this.puedeDisparar = true
     }
   }
 
-  class EnemigoResistente extends Enemigo {
+  class EnemigoResistente extends EnemigoZigZag {
     constructor(x, y) {
       super(x, y)
       this.resistencia = 3
+      this.velY = 0.75
+      this.velX = 1.5
     }
 
     mostrar() {
-      fill(255, 100, 100)
+      fill(230, 0, 0)
       rect(this.x, this.y, this.w, this.h)
+      fill(255)
+      textSize(14)
+      textAlign(CENTER, CENTER)
+      text(this.resistencia, this.x + this.w / 2, this.y + this.h / 2)
     }
   }
+
+  class EnemigoResistenteDispara extends EnemigoResistente {
+    constructor(x, y) {
+      super(x, y)
+      this.puedeDisparar = true
+    }
+  }
+
+class EnemigoCircular extends EnemigoZigZagDispara {
+  constructor(x, y, anguloInicial, grupo) {
+    super(x, y)
+    this.grupo = grupo
+    this.radio = 120
+    this.angulo = anguloInicial
+    this.velAngular = 0.02
+    this.puedeDisparar = true
+  }
+
+  mover() {
+    this.grupo.centroX += this.grupo.direccion * 1
+    if (this.grupo.centroX - this.radio < 0 || this.grupo.centroX + this.radio > width) {
+      this.grupo.direccion *= -1
+    }
+    this.angulo += this.velAngular
+    this.x = this.grupo.centroX + cos(this.angulo) * this.radio
+    this.y = this.grupo.centroY + sin(this.angulo) * this.radio
+  }
+
+  mostrar() {
+    fill(0, 255, 0)
+    rect(this.x, this.y, this.w, this.h)
+  }
+}
+
+class EnemigoCircularResistente extends EnemigoCircular {
+  constructor(x, y, anguloInicial, grupo) {
+    super(x, y, anguloInicial, grupo)
+    this.resistencia = 3
+  }
+
+  mostrar() {
+    fill(0, 200, 0)
+    rect(this.x, this.y, this.w, this.h)
+    fill(255)
+    textSize(14)
+    textAlign(CENTER, CENTER)
+    text(this.resistencia, this.x + this.w / 2, this.y + this.h / 2)
+  }
+}
+
+class EnemigoInmortal extends EnemigoCircular {
+  constructor(x, y, anguloInicial, grupo) {
+    super(x, y, anguloInicial, grupo)
+    this.puedeDisparar = true
+  }
+
+  mostrar() {
+    fill(100, 100, 255)
+    rect(this.x, this.y, this.w, this.h)
+    fill(255)
+    textSize(12)
+    textAlign(CENTER, CENTER)
+    text("∞", this.x + this.w / 2, this.y + this.h / 2)
+  }
+}
 </script>
 </body>
 </html>
